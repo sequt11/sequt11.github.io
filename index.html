@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Right Saver</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            background-color: #0e1218;
+            color: #e1e3e6;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .app {
+            display: flex;
+            height: 100%;
+        }
+        
+        /* Страница списка чатов */
+        .chats-page {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background-color: #1e2228;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 1px solid #2c3138;
+        }
+        
+        .header h1 {
+            font-size: 20px;
+            font-weight: 500;
+        }
+        
+        .import-btn {
+            background-color: #2b5278;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 8px 15px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .import-btn:hover {
+            background-color: #3a6a99;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .chats-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .chat-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            border-bottom: 1px solid #1e2228;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .chat-item:hover {
+            background-color: #1e2228;
+        }
+        
+        .avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background-color: #2b5278;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        
+        .chat-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .chat-name {
+            font-weight: 500;
+            margin-bottom: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .chat-preview {
+            font-size: 14px;
+            color: #8b959e;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .no-chats {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #8b959e;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .no-chats-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            color: #2b5278;
+        }
+        
+        /* Страница чата */
+        .chat-page {
+            width: 100%;
+            display: none;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .chat-header {
+            background-color: #1e2228;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #2c3138;
+        }
+        
+        .back-btn {
+            background: none;
+            border: none;
+            color: #e1e3e6;
+            font-size: 20px;
+            margin-right: 15px;
+            cursor: pointer;
+        }
+        
+        .chat-title {
+            font-weight: 500;
+            font-size: 16px;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            padding: 10px 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            background-color: #0e1218;
+            background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH4AkEEjIZe8QpJQAAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRlZCB3aXRoIEdJTVBkLmUHAAAAJklEQVQ4y2NgGAWjYBSMglEwCkbBKBgFowA3YGRkZPwPxYzQzATFTFDMjCoGAP//A+QZ2QJZAAAAAElFTkSuQmCC');
+            background-attachment: fixed;
+        }
+        
+        .message {
+            max-width: 80%;
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            position: relative;
+            word-wrap: break-word;
+            white-space: pre-wrap; /* Сохраняем переносы строк */
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .message-you {
+            background-color: #2b5278;
+            align-self: flex-end;
+            margin-right: 5px;
+            border-bottom-right-radius: 0;
+        }
+        
+        .message-other {
+            background-color: #1e2228;
+            align-self: flex-start;
+            margin-left: 5px;
+            border-bottom-left-radius: 0;
+        }
+        
+        .message-sender {
+            font-weight: bold;
+            margin-bottom: 3px;
+            font-size: 13px;
+            color: #8b959e;
+        }
+        
+        .message-content {
+            font-size: 15px;
+            line-height: 1.4;
+        }
+        
+        .deleted-message {
+            font-style: italic;
+            color: #8b959e;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Страница списка чатов -->
+        <div class="chats-page" id="chatsPage">
+            <div class="header">
+                <h1>Right Saver</h1>
+            </div>
+            
+            <div class="chats-list" id="chatsList">
+                <div class="no-chats">
+                    <div class="no-chats-icon">💬</div>
+                    <h3>Нет чатов</h3>
+                    <p>Импортируйте файл с историей чатов</p>
+                    <button class="import-btn" id="importBtn" style="margin-top: 15px;">Импорт</button>
+                    <input type="file" id="fileInput" class="file-input" accept=".txt">
+                </div>
+            </div>
+        </div>
+        
+        <!-- Страница чата -->
+        <div class="chat-page" id="chatPage">
+            <div class="chat-header">
+                <button class="back-btn" id="backBtn">←</button>
+                <div class="chat-title" id="chatTitle"></div>
+            </div>
+            
+            <div class="chat-messages" id="chatMessages"></div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const importBtn = document.getElementById('importBtn');
+            const fileInput = document.getElementById('fileInput');
+            const chatsList = document.getElementById('chatsList');
+            const chatsPage = document.getElementById('chatsPage');
+            const chatPage = document.getElementById('chatPage');
+            const backBtn = document.getElementById('backBtn');
+            const chatTitle = document.getElementById('chatTitle');
+            const chatMessages = document.getElementById('chatMessages');
+            
+            let chatsData = {};
+            let currentChat = null;
+            
+            // Обработчик клика на кнопку импорта
+            importBtn.addEventListener('click', function() {
+                fileInput.click();
+            });
+            
+            // Обработчик выбора файла
+            fileInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const content = e.target.result;
+                    parseChatFile(content);
+                };
+                reader.readAsText(file);
+            });
+            
+            // Обработчик кнопки "Назад"
+            backBtn.addEventListener('click', function() {
+                showChatsPage();
+            });
+            
+            // Парсинг файла чата
+            function parseChatFile(content) {
+                chatsData = {};
+                const lines = content.split('\n');
+                let currentChatName = null;
+                let currentMessage = null;
+                
+                for (const line of lines) {
+                    // Пропускаем пустые строки
+                    if (line.trim() === '') continue;
+                    
+                    // Проверяем, начинается ли строка с [Chat @username]
+                    const chatHeaderMatch = line.match(/^\[Chat @([^\]]+)\]/);
+                    if (chatHeaderMatch) {
+                        currentChatName = chatHeaderMatch[1];
+                        chatsData[currentChatName] = [];
+                        currentMessage = null;
+                        continue;
+                    }
+                    
+                    // Если мы находимся внутри чата, парсим сообщения
+                    if (currentChatName) {
+                        const messageMatch = line.match(/^(\[You\]|\[@[^\]]+\]): \[([^\]]+)\] ?(.*)/);
+                        
+                        if (messageMatch) {
+                            // Если нашли новое сообщение, сохраняем предыдущее (если есть)
+                            if (currentMessage) {
+                                chatsData[currentChatName].push(currentMessage);
+                            }
+                            
+                            const sender = messageMatch[1].replace(/^\[|\]$/g, '');
+                            const type = messageMatch[2];
+                            let text = messageMatch[3];
+                            
+                            // Обработка удаленных сообщений
+                            if (text.includes('🗑️ Новое удаление:')) {
+                                text = text.replace(/🗑️ Новое удаление:\s*(Удаленное сообщение:)?\s*([\s\S]*?)\s*Удалил сообщение: @[^\s]+/, '🗑️ $2').trim();
+                                if (text === '🗑️ Без текста') text = '🗑️ [сообщение без текста]';
+                            }
+                            
+                            currentMessage = {
+                                sender,
+                                type,
+                                text: text.replace(/\\n/g, '\n') // Заменяем \n на переносы строк
+                            };
+                        } else if (currentMessage) {
+                            // Если это не новое сообщение, но есть текущее сообщение - добавляем текст к нему
+                            currentMessage.text += '\n' + line.trim();
+                        }
+                    }
+                }
+                
+                // Добавляем последнее сообщение, если оно есть
+                if (currentChatName && currentMessage) {
+                    chatsData[currentChatName].push(currentMessage);
+                }
+                
+                renderChatList();
+            }
+            
+            // Отображение списка чатов
+            function renderChatList() {
+                if (Object.keys(chatsData).length === 0) {
+                    chatsList.innerHTML = `
+                        <div class="no-chats">
+                            <div class="no-chats-icon">😕</div>
+                            <h3>Чаты не найдены</h3>
+                            <p>Файл не содержит данных о чатах</p>
+                            <button class="import-btn" id="importBtn" style="margin-top: 15px;">Импорт</button>
+                            <input type="file" id="fileInput" class="file-input" accept=".txt">
+                        </div>
+                    `;
+                    // Перепривязываем обработчики для новых элементов
+                    document.getElementById('importBtn').addEventListener('click', function() {
+                        fileInput.click();
+                    });
+                    return;
+                }
+                
+                chatsList.innerHTML = '';
+                
+                for (const chatName in chatsData) {
+                    const chat = chatsData[chatName];
+                    const lastMessage = chat[chat.length - 1];
+                    
+                    const chatItem = document.createElement('div');
+                    chatItem.className = 'chat-item';
+                    chatItem.dataset.chatName = chatName;
+                    
+                    // Создаем аватар с первой буквой имени пользователя
+                    const avatar = document.createElement('div');
+                    avatar.className = 'avatar';
+                    avatar.textContent = chatName.charAt(0).toUpperCase();
+                    
+                    const chatInfo = document.createElement('div');
+                    chatInfo.className = 'chat-info';
+                    
+                    const chatNameEl = document.createElement('div');
+                    chatNameEl.className = 'chat-name';
+                    chatNameEl.textContent = `@${chatName}`;
+                    
+                    const chatPreview = document.createElement('div');
+                    chatPreview.className = 'chat-preview';
+                    
+                    // Обрезаем текст предпросмотра и добавляем многоточие, если нужно
+                    let previewText = lastMessage.text.replace(/\n/g, ' '); // Заменяем переносы на пробелы
+                    if (previewText.length > 30) {
+                        previewText = previewText.substring(0, 30) + '...';
+                    }
+                    chatPreview.textContent = previewText;
+                    
+                    chatInfo.appendChild(chatNameEl);
+                    chatInfo.appendChild(chatPreview);
+                    chatItem.appendChild(avatar);
+                    chatItem.appendChild(chatInfo);
+                    
+                    chatItem.addEventListener('click', function() {
+                        currentChat = chatName;
+                        showChatPage();
+                    });
+                    
+                    chatsList.appendChild(chatItem);
+                }
+            }
+            
+            // Отображение сообщений выбранного чата
+            function renderChatMessages() {
+                if (!currentChat || !chatsData[currentChat]) {
+                    chatMessages.innerHTML = '<div class="no-chats">Выберите чат для просмотра</div>';
+                    return;
+                }
+                
+                chatTitle.textContent = `@${currentChat}`;
+                chatMessages.innerHTML = '';
+                
+                // Отображаем сообщения в правильном порядке (старые сверху, новые снизу)
+                const messages = chatsData[currentChat];
+                for (let i = 0; i < messages.length; i++) {
+                    const message = messages[i];
+                    const messageEl = document.createElement('div');
+                    messageEl.className = `message ${message.sender === 'You' ? 'message-you' : 'message-other'}`;
+                    
+                    const senderEl = document.createElement('div');
+                    senderEl.className = 'message-sender';
+                    senderEl.textContent = message.sender === 'You' ? 'Вы' : `@${message.sender.replace('@', '')}`;
+                    
+                    const contentEl = document.createElement('div');
+                    contentEl.className = 'message-content';
+                    
+                    // Обработка удаленных сообщений
+                    if (message.text.startsWith('🗑️')) {
+                        contentEl.innerHTML = `<span class="deleted-message">${message.text}</span>`;
+                    } else {
+                        contentEl.textContent = message.text;
+                    }
+                    
+                    messageEl.appendChild(senderEl);
+                    messageEl.appendChild(contentEl);
+                    
+                    chatMessages.appendChild(messageEl);
+                }
+                
+                // Прокручиваем вниз к новым сообщениям
+                setTimeout(() => {
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }, 10);
+            }
+            
+            // Показать страницу чатов
+            function showChatsPage() {
+                chatsPage.style.display = 'flex';
+                chatPage.style.display = 'none';
+            }
+            
+            // Показать страницу чата
+            function showChatPage() {
+                chatsPage.style.display = 'none';
+                chatPage.style.display = 'flex';
+                renderChatMessages();
+            }
+        });
+    </script>
+</body>
+</html>
