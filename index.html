@@ -150,6 +150,7 @@
             display: flex;
             align-items: center;
             border-bottom: 1px solid #2c3138;
+            flex-shrink: 0;
         }
         
         .back-btn {
@@ -166,9 +167,16 @@
             font-size: 16px;
         }
         
+        .chat-messages-container {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
         .chat-messages {
             flex: 1;
-            padding: 10px 15px;
+            padding: 15px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
@@ -179,12 +187,12 @@
         
         .message {
             max-width: 80%;
-            margin-bottom: 10px;
-            padding: 8px 12px;
+            margin-bottom: 15px;
+            padding: 10px 14px;
             border-radius: 8px;
             position: relative;
             word-wrap: break-word;
-            white-space: pre-wrap; /* Сохраняем переносы строк */
+            white-space: pre-wrap;
             animation: fadeIn 0.3s ease-out;
         }
         
@@ -209,7 +217,7 @@
         
         .message-sender {
             font-weight: bold;
-            margin-bottom: 3px;
+            margin-bottom: 5px;
             font-size: 13px;
             color: #8b959e;
         }
@@ -219,9 +227,16 @@
             line-height: 1.4;
         }
         
-        .deleted-message {
+        .message-type {
             font-style: italic;
             color: #8b959e;
+            margin-top: 5px;
+            font-size: 13px;
+        }
+        
+        .messages-end {
+            height: 20px;
+            flex-shrink: 0;
         }
     </style>
 </head>
@@ -251,7 +266,10 @@
                 <div class="chat-title" id="chatTitle"></div>
             </div>
             
-            <div class="chat-messages" id="chatMessages"></div>
+            <div class="chat-messages-container">
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="messages-end" id="messagesEnd"></div>
+            </div>
         </div>
     </div>
 
@@ -265,6 +283,7 @@
             const backBtn = document.getElementById('backBtn');
             const chatTitle = document.getElementById('chatTitle');
             const chatMessages = document.getElementById('chatMessages');
+            const messagesEnd = document.getElementById('messagesEnd');
             
             let chatsData = {};
             let currentChat = null;
@@ -306,9 +325,16 @@
                     // Проверяем, начинается ли строка с [Chat @username]
                     const chatHeaderMatch = line.match(/^\[Chat @([^\]]+)\]/);
                     if (chatHeaderMatch) {
+                        // Если у нас есть текущее сообщение, сохраняем его перед переходом к новому чату
+                        if (currentChatName && currentMessage) {
+                            chatsData[currentChatName].push(currentMessage);
+                            currentMessage = null;
+                        }
+                        
                         currentChatName = chatHeaderMatch[1];
-                        chatsData[currentChatName] = [];
-                        currentMessage = null;
+                        if (!chatsData[currentChatName]) {
+                            chatsData[currentChatName] = [];
+                        }
                         continue;
                     }
                     
@@ -328,8 +354,8 @@
                             
                             // Обработка удаленных сообщений
                             if (text.includes('🗑️ Новое удаление:')) {
-                                text = text.replace(/🗑️ Новое удаление:\s*(Удаленное сообщение:)?\s*([\s\S]*?)\s*Удалил сообщение: @[^\s]+/, '🗑️ $2').trim();
-                                if (text === '🗑️ Без текста') text = '🗑️ [сообщение без текста]';
+                                text = text.replace(/🗑️ Новое удаление:\s*(Удаленное сообщение:)?\s*([\s\S]*?)\s*Удалил сообщение: @[^\s]+/, '$2').trim();
+                                if (text === 'Без текста') text = '[сообщение без текста]';
                             }
                             
                             currentMessage = {
@@ -401,6 +427,12 @@
                     if (previewText.length > 30) {
                         previewText = previewText.substring(0, 30) + '...';
                     }
+                    
+                    // Если тип сообщения не Text, показываем тип вместо текста
+                    if (lastMessage.type !== 'Text') {
+                        previewText = `[${lastMessage.type}]`;
+                    }
+                    
                     chatPreview.textContent = previewText;
                     
                     chatInfo.appendChild(chatNameEl);
@@ -440,24 +472,31 @@
                     
                     const contentEl = document.createElement('div');
                     contentEl.className = 'message-content';
-                    
-                    // Обработка удаленных сообщений
-                    if (message.text.startsWith('🗑️')) {
-                        contentEl.innerHTML = `<span class="deleted-message">${message.text}</span>`;
-                    } else {
-                        contentEl.textContent = message.text;
-                    }
+                    contentEl.textContent = message.text;
                     
                     messageEl.appendChild(senderEl);
                     messageEl.appendChild(contentEl);
                     
+                    // Добавляем тип сообщения, если это не Text
+                    if (message.type !== 'Text') {
+                        const typeEl = document.createElement('div');
+                        typeEl.className = 'message-type';
+                        typeEl.textContent = `[${message.type}]`;
+                        messageEl.appendChild(typeEl);
+                    }
+                    
                     chatMessages.appendChild(messageEl);
                 }
                 
-                // Прокручиваем вниз к новым сообщениям
+                // Добавляем пустой элемент в конец для отступа
+                const endEl = document.createElement('div');
+                endEl.className = 'messages-end';
+                chatMessages.appendChild(endEl);
+                
+                // Прокручиваем вниз после небольшой задержки
                 setTimeout(() => {
                     chatMessages.scrollTop = chatMessages.scrollHeight;
-                }, 10);
+                }, 50);
             }
             
             // Показать страницу чатов
