@@ -316,13 +316,15 @@
                 chatsData = {};
                 const lines = content.split('\n');
                 let currentChatName = null;
+                let currentChatId = null;
                 let currentMessage = null;
+                let needsUsernameExtraction = false;
                 
                 for (const line of lines) {
                     // Пропускаем пустые строки
                     if (line.trim() === '') continue;
                     
-                    // Проверяем, начинается ли строка с [Chat @username]
+                    // Проверяем формат [Chat @username]
                     const chatHeaderMatch = line.match(/^\[Chat @([^\]]+)\]/);
                     if (chatHeaderMatch) {
                         // Если у нас есть текущее сообщение, сохраняем его перед переходом к новому чату
@@ -331,7 +333,28 @@
                             currentMessage = null;
                         }
                         
+                        // Сбрасываем флаг извлечения username, так как нашли обычный чат
+                        needsUsernameExtraction = false;
                         currentChatName = chatHeaderMatch[1];
+                        currentChatId = null;
+                        if (!chatsData[currentChatName]) {
+                            chatsData[currentChatName] = [];
+                        }
+                        continue;
+                    }
+                    
+                    // Проверяем формат [Chat Chat ID: XXXXXX (Unknown Name)]
+                    const chatIdHeaderMatch = line.match(/^\[Chat Chat ID: (\d+) \(Unknown Name\)\]/);
+                    if (chatIdHeaderMatch) {
+                        // Если у нас есть текущее сообщение, сохраняем его перед переходом к новому чату
+                        if (currentChatName && currentMessage) {
+                            chatsData[currentChatName].push(currentMessage);
+                            currentMessage = null;
+                        }
+                        
+                        currentChatId = chatIdHeaderMatch[1];
+                        currentChatName = `User${currentChatId}`; // Временное имя, будет заменено если найдем username
+                        needsUsernameExtraction = true;
                         if (!chatsData[currentChatName]) {
                             chatsData[currentChatName] = [];
                         }
@@ -340,7 +363,7 @@
                     
                     // Если мы находимся внутри чата, парсим сообщения
                     if (currentChatName) {
-                        const messageMatch = line.match(/^(\[You\]|\[@[^\]]+\]): \[([^\]]+)\] ?(.*)/);
+                        const messageMatch = line.match(/^(\[You\]|\[@[^\]]+\]|\[[^\]]+\]): \[([^\]]+)\] ?(.*)/);
                         
                         if (messageMatch) {
                             // Если нашли новое сообщение, сохраняем предыдущее (если есть)
@@ -351,6 +374,32 @@
                             const sender = messageMatch[1].replace(/^\[|\]$/g, '');
                             const type = messageMatch[2];
                             let text = messageMatch[3];
+                            
+                            // Если нужно извлечь имя пользователя из сообщений
+                            if (needsUsernameExtraction && sender !== 'You') {
+                                let newChatName = null;
+                                
+                                if (sender.startsWith('@')) {
+                                    // Это username - используем его
+                                    newChatName = sender.substring(1); // Убираем @
+                                } else {
+                                    // Это имя (например, Gift Relayer) - используем его как есть
+                                    newChatName = sender;
+                                }
+                                
+                                const oldChatName = currentChatName;
+                                currentChatName = newChatName;
+                                
+                                // Переносим уже сохраненные сообщения под новым именем
+                                if (chatsData[oldChatName]) {
+                                    chatsData[currentChatName] = chatsData[oldChatName];
+                                    delete chatsData[oldChatName];
+                                } else {
+                                    chatsData[currentChatName] = [];
+                                }
+                                
+                                needsUsernameExtraction = false;
+                            }
                             
                             // Обработка удаленных сообщений
                             if (text.includes('🗑️ Новое удаление:')) {
@@ -417,7 +466,12 @@
                     
                     const chatNameEl = document.createElement('div');
                     chatNameEl.className = 'chat-name';
-                    chatNameEl.textContent = `@${chatName}`;
+                    // Если имя начинается с User и содержит только цифры после User, то это ID
+                    if (chatName.match(/^User\d+$/)) {
+                        chatNameEl.textContent = chatName;
+                    } else {
+                        chatNameEl.textContent = `@${chatName}`;
+                    }
                     
                     const chatPreview = document.createElement('div');
                     chatPreview.className = 'chat-preview';
@@ -456,7 +510,13 @@
                     return;
                 }
                 
-                chatTitle.textContent = `@${currentChat}`;
+                // Устанавливаем заголовок чата
+                if (currentChat.match(/^User\d+$/)) {
+                    chatTitle.textContent = currentChat;
+                } else {
+                    chatTitle.textContent = `@${currentChat}`;
+                }
+                
                 chatMessages.innerHTML = '';
                 
                 // Отображаем сообщения в правильном порядке (старые сверху, новые снизу)
