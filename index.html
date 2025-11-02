@@ -87,15 +87,21 @@
             width: 48px;
             height: 48px;
             border-radius: 50%;
-            background-color: #2b5278;
+            background-color: #2b5278; /* Цвет по умолчанию */
             color: white;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: bold;
-            font-size: 18px;
+            font-weight: 500;
+            font-size: 20px;
             margin-right: 12px;
             flex-shrink: 0;
+            line-height: 1;
+            
+            /* 💡 Стили для отображения картинки */
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
         }
         
         .chat-info {
@@ -185,6 +191,7 @@
             background-attachment: fixed;
         }
         
+        /* ... (остальные стили .message и т.д. остаются без изменений) ... */
         .message {
             max-width: 80%;
             margin-bottom: 15px;
@@ -242,7 +249,6 @@
 </head>
 <body>
     <div class="app">
-        <!-- Страница списка чатов -->
         <div class="chats-page" id="chatsPage">
             <div class="header">
                 <h1>Right Saver</h1>
@@ -259,7 +265,6 @@
             </div>
         </div>
         
-        <!-- Страница чата -->
         <div class="chat-page" id="chatPage">
             <div class="chat-header">
                 <button class="back-btn" id="backBtn">←</button>
@@ -283,219 +288,200 @@
             const backBtn = document.getElementById('backBtn');
             const chatTitle = document.getElementById('chatTitle');
             const chatMessages = document.getElementById('chatMessages');
-            const messagesEnd = document.getElementById('messagesEnd');
             
             let chatsData = {};
-            let currentChat = null;
+            let currentChatKey = null;
+
+            // Палитра цветов для аватаров (если аватар не загрузился)
+            const avatarColors = [
+                '#f44336', '#e91e63', '#9c27b0', '#673ab7', 
+                '#3f51b5', '#2196f3', '#009688', '#4caf50', 
+                '#ff9800', '#ff5722', '#795548', '#607d8b'
+            ];
+
+            // Функция для получения цвета по имени
+            function getColorForKey(key) {
+                let hash = 0;
+                if (!key || key.length === 0) return avatarColors[0];
+                for (let i = 0; i < key.length; i++) {
+                    const char = key.charCodeAt(i);
+                    hash = ((hash << 5) - hash) + char;
+                    hash = hash & hash; 
+                }
+                const index = Math.abs(hash) % avatarColors.length;
+                return avatarColors[index];
+            }
             
-            // Обработчик клика на кнопку импорта
-            importBtn.addEventListener('click', function() {
-                fileInput.click();
-            });
-            
-            // Обработчик выбора файла
-            fileInput.addEventListener('change', function(e) {
+            // Обработчики кнопок
+            importBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 
                 const reader = new FileReader();
-                reader.onload = function(e) {
-                    const content = e.target.result;
-                    parseChatFile(content);
-                };
+                reader.onload = (e) => parseChatFile(e.target.result);
                 reader.readAsText(file);
             });
+            backBtn.addEventListener('click', () => showChatsPage());
             
-            // Обработчик кнопки "Назад"
-            backBtn.addEventListener('click', function() {
-                showChatsPage();
-            });
             
-            // Парсинг файла чата
+            // --- ✏️ ИЗМЕНЕНО: Парсинг файла чата ✏️ ---
             function parseChatFile(content) {
                 chatsData = {};
                 const lines = content.split('\n');
-                let currentChatName = null;
-                let currentChatId = null;
+                let currentChatKey = null;
                 let currentMessage = null;
-                let needsUsernameExtraction = false;
                 
                 for (const line of lines) {
-                    // Пропускаем пустые строки
                     if (line.trim() === '') continue;
                     
-                    // Проверяем формат [Chat @username]
-                    const chatHeaderMatch = line.match(/^\[Chat @([^\]]+)\]/);
+                    // 1. Ищем заголовок чата
+                    const chatHeaderMatch = line.match(/^\[Chat ([^\]]+)\]/);
                     if (chatHeaderMatch) {
-                        // Если у нас есть текущее сообщение, сохраняем его перед переходом к новому чату
-                        if (currentChatName && currentMessage) {
-                            chatsData[currentChatName].push(currentMessage);
+                        if (currentChatKey && currentMessage) {
+                            chatsData[currentChatKey].messages.push(currentMessage);
                             currentMessage = null;
                         }
                         
-                        // Сбрасываем флаг извлечения username, так как нашли обычный чат
-                        needsUsernameExtraction = false;
-                        currentChatName = chatHeaderMatch[1];
-                        currentChatId = null;
-                        if (!chatsData[currentChatName]) {
-                            chatsData[currentChatName] = [];
+                        currentChatKey = chatHeaderMatch[1]; 
+                        if (!chatsData[currentChatKey]) {
+                            chatsData[currentChatKey] = {
+                                displayName: currentChatKey,
+                                avatarData: null, // 💡 НОВОЕ ПОЛЕ
+                                messages: []
+                            };
                         }
                         continue;
                     }
                     
-                    // Проверяем формат [Chat Chat ID: XXXXXX (Unknown Name)]
-                    const chatIdHeaderMatch = line.match(/^\[Chat Chat ID: (\d+) \(Unknown Name\)\]/);
-                    if (chatIdHeaderMatch) {
-                        // Если у нас есть текущее сообщение, сохраняем его перед переходом к новому чату
-                        if (currentChatName && currentMessage) {
-                            chatsData[currentChatName].push(currentMessage);
-                            currentMessage = null;
-                        }
-                        
-                        currentChatId = chatIdHeaderMatch[1];
-                        currentChatName = `User${currentChatId}`; // Временное имя, будет заменено если найдем username
-                        needsUsernameExtraction = true;
-                        if (!chatsData[currentChatName]) {
-                            chatsData[currentChatName] = [];
+                    // 2. 💡 НОВОЕ: Ищем данные аватара 💡
+                    // (Используем .startsWith, т.к. Base64 может содержать ']')
+                    if (line.startsWith('[Avatar Data: data:image/')) {
+                        const avatarDataMatch = line.match(/^\[Avatar Data: (data:image\/[^;]+;base64,[^\]]+)\]/);
+                        if (avatarDataMatch && currentChatKey) {
+                            chatsData[currentChatKey].avatarData = avatarDataMatch[1];
                         }
                         continue;
                     }
                     
-                    // Если мы находимся внутри чата, парсим сообщения
-                    if (currentChatName) {
-                        const messageMatch = line.match(/^(\[You\]|\[@[^\]]+\]|\[[^\]]+\]): \[([^\]]+)\] ?(.*)/);
+                    // 3. Ищем сообщения
+                    if (currentChatKey) {
+                        const messageMatch = line.match(/^\[([^\]]+)\]: \[([^\]]+)\] ?(.*)/s);
                         
                         if (messageMatch) {
-                            // Если нашли новое сообщение, сохраняем предыдущее (если есть)
                             if (currentMessage) {
-                                chatsData[currentChatName].push(currentMessage);
+                                chatsData[currentChatKey].messages.push(currentMessage);
                             }
                             
-                            const sender = messageMatch[1].replace(/^\[|\]$/g, '');
+                            const sender = messageMatch[1];
                             const type = messageMatch[2];
                             let text = messageMatch[3];
                             
-                            // Если нужно извлечь имя пользователя из сообщений
-                            if (needsUsernameExtraction && sender !== 'You') {
-                                let newChatName = null;
-                                
-                                if (sender.startsWith('@')) {
-                                    // Это username - используем его
-                                    newChatName = sender.substring(1); // Убираем @
-                                } else {
-                                    // Это имя (например, Gift Relayer) - используем его как есть
-                                    newChatName = sender;
-                                }
-                                
-                                const oldChatName = currentChatName;
-                                currentChatName = newChatName;
-                                
-                                // Переносим уже сохраненные сообщения под новым именем
-                                if (chatsData[oldChatName]) {
-                                    chatsData[currentChatName] = chatsData[oldChatName];
-                                    delete chatsData[oldChatName];
-                                } else {
-                                    chatsData[currentChatName] = [];
-                                }
-                                
-                                needsUsernameExtraction = false;
-                            }
-                            
-                            // Обработка удаленных сообщений
                             if (text.includes('🗑️ Новое удаление:')) {
                                 text = text.replace(/🗑️ Новое удаление:\s*(Удаленное сообщение:)?\s*([\s\S]*?)\s*Удалил сообщение: @[^\s]+/, '$2').trim();
                                 if (text === 'Без текста') text = '[сообщение без текста]';
                             }
                             
                             currentMessage = {
-                                sender,
-                                type,
-                                text: text.replace(/\\n/g, '\n') // Заменяем \n на переносы строк
+                                sender: sender,
+                                type: type,
+                                text: text.replace(/\\n/g, '\n')
                             };
                         } else if (currentMessage) {
-                            // Если это не новое сообщение, но есть текущее сообщение - добавляем текст к нему
                             currentMessage.text += '\n' + line.trim();
                         }
                     }
                 }
                 
-                // Добавляем последнее сообщение, если оно есть
-                if (currentChatName && currentMessage) {
-                    chatsData[currentChatName].push(currentMessage);
+                if (currentChatKey && currentMessage) {
+                    chatsData[currentChatKey].messages.push(currentMessage);
                 }
                 
                 renderChatList();
             }
             
-            // Отображение списка чатов
+            // --- ✏️ ИЗМЕНЕНО: Отображение списка чатов ✏️ ---
             function renderChatList() {
+                // ( ... код для .no-chats ... )
                 if (Object.keys(chatsData).length === 0) {
                     chatsList.innerHTML = `
                         <div class="no-chats">
                             <div class="no-chats-icon">😕</div>
                             <h3>Чаты не найдены</h3>
-                            <p>Файл не содержит данных о чатах</p>
+                            <p>Файл не содержит данных о чатах или имеет неверный формат.</p>
                             <button class="import-btn" id="importBtn" style="margin-top: 15px;">Импорт</button>
                             <input type="file" id="fileInput" class="file-input" accept=".txt">
                         </div>
                     `;
-                    // Перепривязываем обработчики для новых элементов
-                    document.getElementById('importBtn').addEventListener('click', function() {
-                        fileInput.click();
+                    document.getElementById('importBtn').addEventListener('click', () => fileInput.click());
+                    document.getElementById('fileInput').addEventListener('change', (e) => {
+                         const file = e.target.files[0];
+                         if (file) {
+                             const reader = new FileReader();
+                             reader.onload = (e) => parseChatFile(e.target.result);
+                             reader.readAsText(file);
+                         }
                     });
                     return;
                 }
                 
                 chatsList.innerHTML = '';
                 
-                for (const chatName in chatsData) {
-                    const chat = chatsData[chatName];
-                    const lastMessage = chat[chat.length - 1];
+                for (const chatKey in chatsData) {
+                    const chat = chatsData[chatKey];
+                    const messages = chat.messages;
+                    
+                    if (messages.length === 0) continue; 
+                    
+                    const lastMessage = messages[messages.length - 1];
+                    const displayName = chat.displayName;
                     
                     const chatItem = document.createElement('div');
                     chatItem.className = 'chat-item';
-                    chatItem.dataset.chatName = chatName;
+                    chatItem.dataset.chatKey = chatKey;
                     
-                    // Создаем аватар с первой буквой имени пользователя
-                    const avatar = document.createElement('div');
-                    avatar.className = 'avatar';
-                    avatar.textContent = chatName.charAt(0).toUpperCase();
+                    // --- 💡 НОВОЕ: Логика аватара 💡 ---
+                    const avatarEl = document.createElement('div');
+                    avatarEl.className = 'avatar';
                     
+                    if (chat.avatarData) {
+                        // Если есть картинка - ставим ее фоном
+                        avatarEl.style.backgroundImage = `url(${chat.avatarData})`;
+                    } else {
+                        // Если картинки нет - ставим букву и цвет
+                        const firstLetter = displayName.replace(/^@/, '')[0].toUpperCase();
+                        avatarEl.textContent = firstLetter;
+                        avatarEl.style.backgroundColor = getColorForKey(displayName);
+                    }
+                    
+                    // ( ... остальной код для chatInfo, chatNameEl, chatPreview ... )
                     const chatInfo = document.createElement('div');
                     chatInfo.className = 'chat-info';
                     
                     const chatNameEl = document.createElement('div');
                     chatNameEl.className = 'chat-name';
-                    // Если имя начинается с User и содержит только цифры после User, то это ID
-                    if (chatName.match(/^User\d+$/)) {
-                        chatNameEl.textContent = chatName;
-                    } else {
-                        chatNameEl.textContent = `@${chatName}`;
-                    }
+                    chatNameEl.textContent = displayName;
                     
                     const chatPreview = document.createElement('div');
                     chatPreview.className = 'chat-preview';
                     
-                    // Обрезаем текст предпросмотра и добавляем многоточие, если нужно
-                    let previewText = lastMessage.text.replace(/\n/g, ' '); // Заменяем переносы на пробелы
-                    if (previewText.length > 30) {
-                        previewText = previewText.substring(0, 30) + '...';
-                    }
+                    let previewText = lastMessage.text.replace(/\n/g, ' ');
                     
-                    // Если тип сообщения не Text, показываем тип вместо текста
                     if (lastMessage.type !== 'Text') {
-                        previewText = `[${lastMessage.type}]`;
+                        previewText = `[${lastMessage.type}]` + (previewText ? `: ${previewText}` : '');
                     }
-                    
+                    if (previewText.length > 40) {
+                        previewText = previewText.substring(0, 40) + '...';
+                    }
                     chatPreview.textContent = previewText;
                     
                     chatInfo.appendChild(chatNameEl);
                     chatInfo.appendChild(chatPreview);
-                    chatItem.appendChild(avatar);
+                    chatItem.appendChild(avatarEl); // Используем avatarEl
                     chatItem.appendChild(chatInfo);
                     
                     chatItem.addEventListener('click', function() {
-                        currentChat = chatName;
+                        currentChatKey = chatKey;
                         showChatPage();
                     });
                     
@@ -503,24 +489,18 @@
                 }
             }
             
-            // Отображение сообщений выбранного чата
+            // --- ✏️ (Небольшие изменения) Отображение сообщений чата ✏️ ---
             function renderChatMessages() {
-                if (!currentChat || !chatsData[currentChat]) {
+                if (!currentChatKey || !chatsData[currentChatKey]) {
                     chatMessages.innerHTML = '<div class="no-chats">Выберите чат для просмотра</div>';
                     return;
                 }
                 
-                // Устанавливаем заголовок чата
-                if (currentChat.match(/^User\d+$/)) {
-                    chatTitle.textContent = currentChat;
-                } else {
-                    chatTitle.textContent = `@${currentChat}`;
-                }
-                
+                const chat = chatsData[currentChatKey];
+                chatTitle.textContent = chat.displayName;
                 chatMessages.innerHTML = '';
                 
-                // Отображаем сообщения в правильном порядке (старые сверху, новые снизу)
-                const messages = chatsData[currentChat];
+                const messages = chat.messages;
                 for (let i = 0; i < messages.length; i++) {
                     const message = messages[i];
                     const messageEl = document.createElement('div');
@@ -528,32 +508,39 @@
                     
                     const senderEl = document.createElement('div');
                     senderEl.className = 'message-sender';
-                    senderEl.textContent = message.sender === 'You' ? 'Вы' : `@${message.sender.replace('@', '')}`;
+                    senderEl.textContent = message.sender === 'You' ? 'Вы' : message.sender;
                     
                     const contentEl = document.createElement('div');
                     contentEl.className = 'message-content';
                     contentEl.textContent = message.text;
                     
                     messageEl.appendChild(senderEl);
-                    messageEl.appendChild(contentEl);
                     
-                    // Добавляем тип сообщения, если это не Text
+                    // Не показываем пустое поле, если у медиа нет текста
+                    if (message.text.trim() !== '') {
+                        messageEl.appendChild(contentEl);
+                    }
+                    
                     if (message.type !== 'Text') {
                         const typeEl = document.createElement('div');
                         typeEl.className = 'message-type';
                         typeEl.textContent = `[${message.type}]`;
-                        messageEl.appendChild(typeEl);
+                        
+                        if (message.text.trim() === '') {
+                             typeEl.style.marginTop = '0';
+                             messageEl.appendChild(typeEl);
+                        } else {
+                             contentEl.appendChild(typeEl);
+                        }
                     }
                     
                     chatMessages.appendChild(messageEl);
                 }
                 
-                // Добавляем пустой элемент в конец для отступа
                 const endEl = document.createElement('div');
                 endEl.className = 'messages-end';
                 chatMessages.appendChild(endEl);
                 
-                // Прокручиваем вниз после небольшой задержки
                 setTimeout(() => {
                     chatMessages.scrollTop = chatMessages.scrollHeight;
                 }, 50);
